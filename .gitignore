@@ -2,3 +2,4 @@
 __pycache__
 venv
 proxy.cache
+last_used.cache

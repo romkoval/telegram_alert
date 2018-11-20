@@ -1,4 +1,5 @@
 import os
+import sys
 import urllib.request
 import json
 import datetime
@@ -32,18 +33,60 @@ def make_proxy_str(proxy):
     htype = proxy["type"]
     return {htype: htype + "://" + host + ":" + str(port)}
 
-def install_proxy():
-    proxy = make_proxy_str(get_rand_proxy())
-    print('using proxy:%s' % (proxy))
-    proxy_support = urllib.request.ProxyHandler(proxy)
-    opener = urllib.request.build_opener(proxy_support)
-    urllib.request.install_opener(opener)
+def save_last_used(proxy):
+    with open('last_used.cache', mode='w') as f:
+        f.write(json.dumps(proxy))
+
+def load_last_used() -> dict:
+    """ loads last used proxy """
+    if not os.path.isfile('last_used.cache'):
+        return None
+    try:
+        with open('last_used.cache', mode='r') as f:
+            return json.loads(f.read())
+    except Exception as e:
+        print(e, file=sys.stderr)
+        return None
+
+def install_proxy(attempts):
+    proxylist = [get_rand_proxy() for _ in range(attempts)]
+    last_used = load_last_used()
+    if last_used:
+        proxylist.insert(0, last_used)
+    for proxy in proxylist:
+        print('using proxy:%s %s' % (make_proxy_str(proxy), proxy['country']), end='')
+        
+        proxy_support = urllib.request.ProxyHandler(make_proxy_str(proxy))
+        opener = urllib.request.build_opener(proxy_support)
+        urllib.request.install_opener(opener)
+        try:
+            with urllib.request.urlopen('https://telegram.org', timeout=4) as req:
+                req.read(10)
+            save_last_used(proxy)
+            print(' OK')
+            return
+        except urllib.error.URLError as err:
+            print(' ERR')
+            print(err, file=sys.stderr)
+
+def print_help():
+    print(" Usage: %s api_key chat_id message" % sys.argv[0])
 
 def main():
-    install_proxy()
+    if len(sys.argv) < 4:
+        print_help()
+        return 1
+    api_key, chat_id, message = sys.argv[1], sys.argv[2], sys.argv[3]
 
-    with urllib.request.urlopen('https://telegram.org/') as response:
-        print(response.read())
+    install_proxy(attempts=10)
+    url = 'https://api.telegram.org/bot%s/sendMessage?chat_id=%s&text=%s' % (api_key, chat_id, message)
+    with urllib.request.urlopen(url, timeout=10) as response:
+        res = json.loads(response.read())
+        if res["ok"]:
+            print("message sent: id=%d" % res["result"]["message_id"])
+        else:
+            print("failed to send")
+        return 1 if not res["ok"] else 0
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
