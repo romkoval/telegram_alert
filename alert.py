@@ -1,6 +1,7 @@
 import os
 import sys
 import urllib.request
+import urllib.parse
 import json
 import datetime
 import random
@@ -79,7 +80,7 @@ def main():
     api_key, chat_id, message = sys.argv[1], sys.argv[2], sys.argv[3]
 
     install_proxy(attempts=10)
-    url = 'https://api.telegram.org/bot%s/sendMessage?chat_id=%s&text=%s' % (api_key, chat_id, message)
+    url = 'https://api.telegram.org/bot%s/sendMessage?chat_id=%s&text=%s' % (api_key, chat_id, urllib.parse.quote_plus(message))
     with urllib.request.urlopen(url, timeout=10) as response:
         res = json.loads(response.read())
         if res["ok"]:
